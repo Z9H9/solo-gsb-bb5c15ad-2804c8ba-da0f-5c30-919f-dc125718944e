@@ -6,6 +6,8 @@ const STORAGE_KEY = "decision-desk-session";
 let state = null;
 let busy = false;
 let selectedPair = null; // 冲突环上待重新判定的组合 {a, b}
+let jumpedPair = null;   // 跳转评审中的推荐组合 {a, b}，判定后自动清除
+let dismissedKey = null; // 已选择「继续原顺序」的推荐 key，推荐变化前不再展示
 
 /* ---------- 工具 ---------- */
 
@@ -48,12 +50,20 @@ function render() {
   $("#progress-bar").style.width = total ? `${(done / total) * 100}%` : "0%";
   $("#progress-text").textContent = `${done} / ${total}`;
 
-  const cur = state.current_pair;
-  $("#current-pair").classList.toggle("hidden", !cur);
-  $("#done-banner").classList.toggle("hidden", !!cur);
-  if (cur) {
-    $("#btn-a").textContent = cur.a;
-    $("#btn-b").textContent = cur.b;
+  // 跳转目标若已不再是待比较组合（如撤销、重置后），自动退出跳转模式
+  if (
+    jumpedPair &&
+    !state.pending.some((p) => p.a === jumpedPair.a && p.b === jumpedPair.b)
+  ) {
+    jumpedPair = null;
+  }
+  const active = jumpedPair || state.current_pair;
+  $("#current-pair").classList.toggle("hidden", !active);
+  $("#jump-banner").classList.toggle("hidden", !jumpedPair);
+  $("#done-banner").classList.toggle("hidden", !!active);
+  if (active) {
+    $("#btn-a").textContent = active.a;
+    $("#btn-b").textContent = active.b;
   }
   $("#undo-btn").disabled = !state.can_undo;
 
@@ -61,6 +71,7 @@ function render() {
   renderPending();
   renderMatrix();
   renderConflict();
+  renderNextPair();
 }
 
 function renderRanking() {
@@ -288,6 +299,53 @@ function selectConflictPair(pair) {
   $("#conflict-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+/* ---------- 下一对优先级推荐 ---------- */
+
+function renderNextPair() {
+  const card = $("#nextpair-card");
+  const rec = state.next_pair;
+  if (!rec || jumpedPair) {
+    card.classList.add("hidden");
+    return;
+  }
+  const key = `${rec.pair.a}↔${rec.pair.b}`;
+  if (dismissedKey === key) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  $("#nextpair-pair").textContent = `${rec.pair.a} ↔ ${rec.pair.b}`;
+  $("#nextpair-score").textContent = `影响分 ${rec.impact} / ${rec.total_pairs}`;
+  $("#nextpair-reason").textContent = rec.reason;
+  $("#nextpair-title-a").textContent = `若「${rec.pair.a}」胜`;
+  $("#nextpair-title-b").textContent = `若「${rec.pair.b}」胜`;
+  renderRankingInto($("#nextpair-ranking-a"), rec.previews.a);
+  renderRankingInto($("#nextpair-ranking-b"), rec.previews.b);
+  renderRankingInto($("#nextpair-ranking-tie"), rec.previews.tie);
+
+  // 推荐组合即默认顺序的下一对时无需跳转
+  const cur = state.current_pair;
+  const isCurrent = cur && cur.a === rec.pair.a && cur.b === rec.pair.b;
+  $("#nextpair-jump").classList.toggle("hidden", !!isCurrent);
+  $("#nextpair-current-hint").classList.toggle("hidden", !isCurrent);
+}
+
+function jumpToRecommended() {
+  if (busy || !state || !state.next_pair) return;
+  jumpedPair = { ...state.next_pair.pair };
+  dismissedKey = null;
+  render();
+  $("#current-pair").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  toast("已跳转至推荐组合，判定后回到默认顺序");
+}
+
+function dismissNextPair() {
+  if (state && state.next_pair) {
+    dismissedKey = `${state.next_pair.pair.a}↔${state.next_pair.pair.b}`;
+  }
+  renderNextPair();
+}
+
 /* ---------- 数据操作 ---------- */
 
 async function refresh() {
@@ -306,14 +364,16 @@ async function refresh() {
 }
 
 async function judge(result) {
-  if (busy || !state || !state.current_pair) return;
+  if (busy || !state) return;
+  const pair = jumpedPair || state.current_pair;
+  if (!pair) return;
   busy = true;
   try {
-    const { a, b } = state.current_pair;
     state = await api(`/api/sessions/${state.session_id}/judgments`, {
       method: "POST",
-      body: JSON.stringify({ a, b, result }),
+      body: JSON.stringify({ a: pair.a, b: pair.b, result }),
     });
+    jumpedPair = null; // 判定完成，回到默认顺序
     render();
   } catch (e) {
     toast(e.message);
@@ -386,6 +446,7 @@ async function resetRound() {  if (busy || !state) return;
   busy = true;
   try {
     state = await api(`/api/sessions/${state.session_id}/reset`, { method: "POST" });
+    jumpedPair = null;
     render();
     toast("本轮已重置");
   } catch (e) {
@@ -415,6 +476,8 @@ async function startSession() {
     });
     localStorage.setItem(STORAGE_KEY, state.session_id);
     selectedPair = null;
+    jumpedPair = null;
+    dismissedKey = null;
     render();
   } catch (e) {
     toast(e.message);
@@ -426,6 +489,8 @@ function newRound() {
   localStorage.removeItem(STORAGE_KEY);
   state = null;
   selectedPair = null;
+  jumpedPair = null;
+  dismissedKey = null;
   showSetup();
 }
 
@@ -452,6 +517,12 @@ $("#revise-cancel").addEventListener("click", () => {
   renderConflict();
 });
 $("#suggestion-apply").addEventListener("click", applySuggestion);
+$("#nextpair-jump").addEventListener("click", jumpToRecommended);
+$("#nextpair-continue").addEventListener("click", dismissNextPair);
+$("#jump-cancel").addEventListener("click", () => {
+  jumpedPair = null;
+  render();
+});
 
 document.addEventListener("keydown", (e) => {
   if ($("#review-view").classList.contains("hidden")) return;
@@ -460,7 +531,7 @@ document.addEventListener("keydown", (e) => {
     undo();
     return;
   }
-  if (!state || !state.current_pair) return;
+  if (!state || !(jumpedPair || state.current_pair)) return;
   if (e.key === "ArrowLeft") judge("a");
   else if (e.key === "ArrowRight") judge("b");
   else if (e.key === "ArrowDown") judge("tie");

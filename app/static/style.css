@@ -331,6 +331,70 @@ table.matrix th {
 }
 .tie-inline:hover:not(:disabled) { background: rgba(245, 197, 66, 0.12); }
 
+/* ---------- 下一对优先级推荐 ---------- */
+.card.nextpair { border-color: rgba(91, 140, 255, 0.55); }
+.nextpair-head { margin: 0 0 0.3rem; }
+.nextpair-head strong { color: var(--accent); }
+.nextpair-badge {
+  display: inline-block;
+  margin-left: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 99px;
+  padding: 0.12rem 0.65rem;
+  vertical-align: middle;
+}
+#nextpair-reason { margin: 0.2rem 0 0.8rem; }
+.nextpair-previews {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 720px) {
+  .nextpair-previews { grid-template-columns: 1fr; }
+}
+.nextpair-preview {
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+}
+.nextpair-preview-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.nextpair-preview .rank-row { padding: 0.25rem 0; }
+.nextpair-preview .rank-badge { font-size: 0.72rem; }
+#nextpair-current-hint { align-self: center; font-size: 0.85rem; }
+
+.jump-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.88rem;
+  color: var(--accent);
+  background: rgba(91, 140, 255, 0.1);
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+}
+.jump-banner button {
+  font-size: 0.82rem;
+  padding: 0.25rem 0.8rem;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: transparent;
+}
+.jump-banner button:hover:not(:disabled) { background: rgba(91, 140, 255, 0.15); }
+
 /* ---------- 提示条 ---------- */
 #toast {
   position: fixed;
