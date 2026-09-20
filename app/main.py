@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .conflict import minimum_tie_resolution, shortest_cycle
+from .priority import recommend_next_pair
 from .schulze import rank_groups, strongest_paths
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -191,6 +192,8 @@ def load_state(conn: sqlite3.Connection, session_id: str) -> dict:
         "matrix": matrix,
         "conflict": conflict,
         "suggestion": suggestion,
+        # 下一对优先级推荐：纯内存模拟，不写库、不影响进度
+        "next_pair": recommend_next_pair(candidates, history, pending),
         "can_undo": bool(history),
     }
 
@@ -237,17 +240,32 @@ def get_session(sid: str):
 
 @app.post("/api/sessions/{sid}/judgments", status_code=201)
 def judge(sid: str, payload: JudgmentCreate):
+    """记录一对组合的判断。
+
+    默认按「当前待比较组合」依次评审；为支持「下一对优先级」推荐的一键跳转，
+    也接受任意尚未比较的组合。与复核接口一致：组合统一按候选录入顺序存储，
+    result 始终相对请求中先出现的 a 解释。已判定或无效组合分别返回 409/422。
+    """
     conn = get_conn()
     try:
         state = load_state(conn, sid)
-        current = state["current_pair"]
-        if current is None:
-            raise HTTPException(409, "本轮所有组合均已比较完毕")
-        if payload.a != current["a"] or payload.b != current["b"]:
-            raise HTTPException(409, f"当前应比较的组合是「{current['a']} vs {current['b']}」")
+        order = {name: i for i, name in enumerate(state["candidates"])}
+        if payload.a == payload.b or payload.a not in order or payload.b not in order:
+            raise HTTPException(422, "无效的比较组合")
+        # 统一按候选录入顺序存储；result 始终相对请求中先出现的 a 解释
+        a, b = sorted((payload.a, payload.b), key=order.__getitem__)
+        if not any(p["a"] == a and p["b"] == b for p in state["pending"]):
+            if state["current_pair"] is None:
+                raise HTTPException(409, "本轮所有组合均已比较完毕")
+            raise HTTPException(409, "该组合已判定，请刷新后重试")
+        if payload.result == "tie":
+            result = "tie"
+        else:
+            winner = payload.a if payload.result == "a" else payload.b
+            result = "a" if winner == a else "b"
         conn.execute(
             "INSERT INTO judgments (session_id, a, b, result) VALUES (?, ?, ?, ?)",
-            (sid, payload.a, payload.b, payload.result),
+            (sid, a, b, result),
         )
         conn.commit()
         return load_state(conn, sid)

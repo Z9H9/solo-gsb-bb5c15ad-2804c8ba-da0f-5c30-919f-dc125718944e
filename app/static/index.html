@@ -32,6 +32,11 @@
           <span id="progress-text" class="muted"></span>
         </div>
 
+        <div id="jump-banner" class="hidden">
+          <span>🎯 已跳转至推荐组合 · 原顺序下一对为 <strong id="jump-original"></strong></span>
+          <button id="jump-back" type="button">返回原顺序</button>
+        </div>
+
         <div id="current-pair">
           <h2>你更倾向哪一个？</h2>
           <div class="duel">
@@ -49,6 +54,31 @@
           <button id="undo-btn">↩︎ 撤销上一判断</button>
           <button id="reset-btn">🗑 重置本轮</button>
           <button id="new-btn">✚ 新一轮</button>
+        </div>
+      </div>
+
+      <!-- 下一对推荐 -->
+      <div id="nextpair-card" class="card hidden">
+        <h3>🎯 下一对推荐</h3>
+        <p class="nextpair-head">建议优先评审：<strong id="nextpair-name"></strong></p>
+        <p id="nextpair-reason" class="muted"></p>
+        <div class="nextpair-previews">
+          <div class="nextpair-preview">
+            <p class="nextpair-preview-title" id="nextpair-title-a"></p>
+            <div id="nextpair-rank-a"></div>
+          </div>
+          <div class="nextpair-preview">
+            <p class="nextpair-preview-title">若平局</p>
+            <div id="nextpair-rank-tie"></div>
+          </div>
+          <div class="nextpair-preview">
+            <p class="nextpair-preview-title" id="nextpair-title-b"></p>
+            <div id="nextpair-rank-b"></div>
+          </div>
+        </div>
+        <div class="revise-actions">
+          <button id="nextpair-jump" class="primary">🎯 立即评审这一对</button>
+          <span id="nextpair-is-current" class="muted hidden">推荐组合即当前组合，直接判定即可</span>
         </div>
       </div>
 

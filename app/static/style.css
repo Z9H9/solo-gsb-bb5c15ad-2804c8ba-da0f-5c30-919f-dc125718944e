@@ -331,6 +331,50 @@ table.matrix th {
 }
 .tie-inline:hover:not(:disabled) { background: rgba(245, 197, 66, 0.12); }
 
+/* ---------- 下一对推荐 ---------- */
+#nextpair-card { border-color: rgba(91, 140, 255, 0.55); }
+.nextpair-head { margin: 0 0 0.3rem; }
+#nextpair-name { color: var(--accent); }
+#nextpair-reason { margin: 0.2rem 0 0; font-size: 0.9rem; }
+.nextpair-previews {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
+  margin: 0.9rem 0;
+}
+@media (max-width: 720px) {
+  .nextpair-previews { grid-template-columns: 1fr; }
+}
+.nextpair-preview {
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+}
+.nextpair-preview-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.nextpair-preview .rank-row { padding: 0.25rem 0; font-size: 0.9rem; }
+#nextpair-is-current { align-self: center; font-size: 0.88rem; }
+
+#jump-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+  padding: 0.5rem 0.8rem;
+  background: rgba(91, 140, 255, 0.1);
+  border: 1px solid rgba(91, 140, 255, 0.4);
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+#jump-banner button { padding: 0.25rem 0.8rem; font-size: 0.85rem; }
+
 /* ---------- 提示条 ---------- */
 #toast {
   position: fixed;

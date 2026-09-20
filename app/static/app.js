@@ -6,6 +6,7 @@ const STORAGE_KEY = "decision-desk-session";
 let state = null;
 let busy = false;
 let selectedPair = null; // 冲突环上待重新判定的组合 {a, b}
+let focusPair = null; // 跳转到推荐组合后的当前评审组合 {a, b}，null 表示按原顺序
 
 /* ---------- 工具 ---------- */
 
@@ -48,12 +49,20 @@ function render() {
   $("#progress-bar").style.width = total ? `${(done / total) * 100}%` : "0%";
   $("#progress-text").textContent = `${done} / ${total}`;
 
-  const cur = state.current_pair;
-  $("#current-pair").classList.toggle("hidden", !cur);
-  $("#done-banner").classList.toggle("hidden", !!cur);
-  if (cur) {
-    $("#btn-a").textContent = cur.a;
-    $("#btn-b").textContent = cur.b;
+  // 跳转组合已不在待比较列表（已判定/撤销/重置）时自动回到原顺序
+  if (focusPair && !state.pending.some((p) => p.a === focusPair.a && p.b === focusPair.b)) {
+    focusPair = null;
+  }
+  const active = focusPair || state.current_pair;
+  $("#current-pair").classList.toggle("hidden", !active);
+  $("#done-banner").classList.toggle("hidden", !!active);
+  if (active) {
+    $("#btn-a").textContent = active.a;
+    $("#btn-b").textContent = active.b;
+  }
+  $("#jump-banner").classList.toggle("hidden", !focusPair);
+  if (focusPair && state.current_pair) {
+    $("#jump-original").textContent = `${state.current_pair.a} ↔ ${state.current_pair.b}`;
   }
   $("#undo-btn").disabled = !state.can_undo;
 
@@ -61,6 +70,7 @@ function render() {
   renderPending();
   renderMatrix();
   renderConflict();
+  renderNextPair();
 }
 
 function renderRanking() {
@@ -288,6 +298,45 @@ function selectConflictPair(pair) {
   $("#conflict-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+/* ---------- 下一对推荐 ---------- */
+
+function renderNextPair() {
+  const card = $("#nextpair-card");
+  const np = state.next_pair;
+  if (!np) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  $("#nextpair-name").textContent = `${np.a} ↔ ${np.b}`;
+  if (np.impact > 0) {
+    $("#nextpair-reason").textContent =
+      `三种结果下共有 ${np.impact} / ${np.candidate_pairs} 个候选对的相对名次` +
+      `（前 / 后 / 并列）会发生变化，为当前所有待比较组合中影响最大；` +
+      `影响分相同的组合按原待比较顺序推荐。`;
+  } else {
+    $("#nextpair-reason").textContent =
+      "当前所有待比较组合的结果都不会再改变任何候选对的相对名次，可按原顺序完成剩余比较。";
+  }
+  $("#nextpair-title-a").textContent = `若「${np.a}」胜`;
+  $("#nextpair-title-b").textContent = `若「${np.b}」胜`;
+  renderRankingInto($("#nextpair-rank-a"), np.previews.a);
+  renderRankingInto($("#nextpair-rank-tie"), np.previews.tie);
+  renderRankingInto($("#nextpair-rank-b"), np.previews.b);
+
+  const cur = state.current_pair;
+  const isCurrent = cur && cur.a === np.a && cur.b === np.b;
+  $("#nextpair-jump").classList.toggle("hidden", !!isCurrent);
+  $("#nextpair-is-current").classList.toggle("hidden", !isCurrent);
+}
+
+function jumpToRecommended() {
+  if (busy || !state || !state.next_pair) return;
+  focusPair = { a: state.next_pair.a, b: state.next_pair.b };
+  render();
+  $("#current-pair").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 /* ---------- 数据操作 ---------- */
 
 async function refresh() {
@@ -306,14 +355,17 @@ async function refresh() {
 }
 
 async function judge(result) {
-  if (busy || !state || !state.current_pair) return;
+  if (busy || !state) return;
+  const active = focusPair || state.current_pair;
+  if (!active) return;
   busy = true;
   try {
-    const { a, b } = state.current_pair;
+    const { a, b } = active;
     state = await api(`/api/sessions/${state.session_id}/judgments`, {
       method: "POST",
       body: JSON.stringify({ a, b, result }),
     });
+    focusPair = null; // 判定完成后回到原顺序流程
     render();
   } catch (e) {
     toast(e.message);
@@ -386,6 +438,7 @@ async function resetRound() {  if (busy || !state) return;
   busy = true;
   try {
     state = await api(`/api/sessions/${state.session_id}/reset`, { method: "POST" });
+    focusPair = null;
     render();
     toast("本轮已重置");
   } catch (e) {
@@ -415,6 +468,7 @@ async function startSession() {
     });
     localStorage.setItem(STORAGE_KEY, state.session_id);
     selectedPair = null;
+    focusPair = null;
     render();
   } catch (e) {
     toast(e.message);
@@ -426,6 +480,7 @@ function newRound() {
   localStorage.removeItem(STORAGE_KEY);
   state = null;
   selectedPair = null;
+  focusPair = null;
   showSetup();
 }
 
@@ -452,6 +507,11 @@ $("#revise-cancel").addEventListener("click", () => {
   renderConflict();
 });
 $("#suggestion-apply").addEventListener("click", applySuggestion);
+$("#nextpair-jump").addEventListener("click", jumpToRecommended);
+$("#jump-back").addEventListener("click", () => {
+  focusPair = null;
+  render();
+});
 
 document.addEventListener("keydown", (e) => {
   if ($("#review-view").classList.contains("hidden")) return;
@@ -460,7 +520,7 @@ document.addEventListener("keydown", (e) => {
     undo();
     return;
   }
-  if (!state || !state.current_pair) return;
+  if (!state || (!state.current_pair && !focusPair)) return;
   if (e.key === "ArrowLeft") judge("a");
   else if (e.key === "ArrowRight") judge("b");
   else if (e.key === "ArrowDown") judge("tie");
